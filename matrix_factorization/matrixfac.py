@@ -84,7 +84,7 @@ def matrix_factorization_lr_sr(R, P, Q, K, steps=5000, alpha=0.0002, beta=0.02):
                     r_aprox =  numpy.dot(x,theta_t) - R[i][j]
                     for k in xrange(K):
                         P[i][k] = x[k]       - alpha * (r_aprox * theta_t[k] + beta * x[k] + social_regularization(j,R,Q,k))
-                        Q[j][k] = theta_t[k] - alpha * (r_aprox * x[k]       + beta * theta_t[k] + social_regularization(j,R,Q,k))
+                        Q[j][k] = theta_t[k] - alpha * (r_aprox * x[k]       + beta * theta_t[k])
     return P, Q
 
 def social_regularization(u, R, Q, k, beta=0.02):
