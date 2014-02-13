@@ -9,6 +9,7 @@ try:
     import math
     import scipy
     from scipy.stats import pearsonr
+    from random import randint
 except:
     print "This implementation requires the numpy module."
     exit(0)
@@ -37,138 +38,126 @@ def rmse(predictions, R):
 
     return rmse
 
-def matrix_factorization(R, U, V, K=2, steps=5000, alpha=0.0002, lamb=0.02 ,beta=0.02):
+def sgd(R, U, V, K=2, steps=180000, alpha=0.0002, lamb=0.02 ,beta=0.02):
     for step in xrange(steps):
-        for i in xrange(len(R)):
-            for j in xrange(len(R[i])):
-                if R[i][j] > 0:
-                    Ui = U[i,:]
-                    Vj = V[j,:]
-                    Ra =  numpy.dot(Ui.T,Vj) - R[i][j]
-                    for k in xrange(K):
-                        U[i][k] = Ui[k] - alpha * ( (Ra * Vj[k]) + (lamb * Ui[k]) )
-                        V[j][k] = Vj[k] - alpha * ( (Ra * Ui[k]) + (lamb * Vj[k]) )
+
+        i = randint(0,len(U)-1)
+        j = randint(0,len(V)-1)
+
+        if R[i][j] > 0:
+            Ui = U[i,:]
+            Vj = V[j,:]
+            Ra =  R[i][j] - numpy.dot(Ui.T,Vj)
+            u_temp = Ui + 2*alpha * ( (Ra * Vj) - (lamb/len(U) * Ui) )
+            V[j]   = Vj + 2*alpha * ( (Ra * Ui) - (lamb/len(V) * Vj) )
+            U[i]   = u_temp
 
     return U, V
 
-def split_R(R):
-
-    v_split_R = numpy.split(R,3)
-    
-    h_split_1 = numpy.hsplit(v_split_R[0],3)
-    h_split_2 = numpy.hsplit(v_split_R[0],3)
-    h_split_3 = numpy.hsplit(v_split_R[0],3)
-
-    print h_split_1
-
-
-def dsgd(R, U, V):
-
-    #Verify if it is a quadratic matrix
-    # if len(R)!=len(R[i]):
-    #     return False
-
-    #R size must to be divided by block_size
-    # if len(R)%block_size!=0
-        # return False
+def dsgd_3x3(R, U, V):
 
     v_split_R = numpy.split(R,3)
     
     h_split_0 = numpy.hsplit(v_split_R[0],3)
-    h_split_1 = numpy.hsplit(v_split_R[0],3)
-    h_split_2 = numpy.hsplit(v_split_R[0],3)
+    h_split_1 = numpy.hsplit(v_split_R[1],3)
+    h_split_2 = numpy.hsplit(v_split_R[2],3)
+
+    b_11 = h_split_0[0]
+    b_12 = h_split_0[1]
+    b_13 = h_split_0[2]
+
+    b_21 = h_split_1[0]
+    b_22 = h_split_1[1]
+    b_23 = h_split_1[2]
+
+    b_31 = h_split_2[0]
+    b_32 = h_split_2[1]
+    b_33 = h_split_2[2]
 
     split_U = numpy.split(U,3)
     split_V = numpy.split(V,3)
 
-    ############ 1st Pass ############
+    T = 100
+    
+    U1 = split_U[0]
+    U2 = split_U[1]
+    U3 = split_U[2]
 
-    T = 5
-    alpha = 0.0002
+    V1 = split_V[0]
+    V2 = split_V[1]
+    V3 = split_V[2]
 
-    U0 = split_U[0]
-    U1 = split_U[1]
-    U2 = split_U[2]
+    for step in xrange(1000): 
 
-    V0 = split_V[0]
-    V1 = split_V[1]
-    V2 = split_V[2]
+        i = randint(0,5)
 
-    for step in xrange(5000): 
+        if i == 0:
+            U1,V1 = sgd(b_11, U1, V1, 2, T)
+            U2,V2 = sgd(b_22, U2, V2, 2, T)
+            U3,V3 = sgd(b_33, U3, V3, 2, T)
+        if i == 1:
+            U1,V2 = sgd(b_12, U1, V2, 2, T)
+            U2,V3 = sgd(b_23, U2, V3, 2, T)
+            U3,V1 = sgd(b_31, U3, V1, 2, T)
+        if i == 2:
+            U1,V3 = sgd(b_13, U1, V3, 2, T)
+            U2,V1 = sgd(b_21, U2, V1, 2, T)
+            U3,V2 = sgd(b_32, U3, V2, 2, T)
+        if i == 3:
+            U1,V1 = sgd(b_11, U1, V1, 2, T)
+            U2,V3 = sgd(b_23, U2, V3, 2, T)
+            U3,V2 = sgd(b_32, U3, V2, 2, T)
+        if i == 4:
+            U1,V2 = sgd(b_12, U1, V2, 2, T)
+            U2,V1 = sgd(b_21, U2, V1, 2, T)
+            U3,V3 = sgd(b_33, U3, V3, 2, T)
+        if i == 5:
+            U1,V3 = sgd(b_13, U1, V3, 2, T)
+            U2,V2 = sgd(b_22, U2, V2, 2, T)
+            U3,V1 = sgd(b_31, U3, V1, 2, T)
 
-        U0,V0 = matrix_factorization(h_split_0[0], U0, V0, 2, T, alpha)
-        U1,V1 = matrix_factorization(h_split_1[1], U1, V1, 2, T, alpha)
-        U2,V2 = matrix_factorization(h_split_2[2], U2, V2, 2, T, alpha)
+    U = numpy.concatenate((U1, U2, U3))
+    V = numpy.concatenate((V1, V2, V3))
+    
+    return U, V
 
-        U1,V2 = matrix_factorization(h_split_1[2], U1, V2, 2, T, alpha)
-        U0,V1 = matrix_factorization(h_split_0[1], U0, V1, 2, T, alpha)
-        U2,V0 = matrix_factorization(h_split_2[0], U2, V0, 2, T, alpha)
-
-
-        U1,V0 = matrix_factorization(h_split_1[0], U1, V0, 2, T, alpha)
-        U2,V1 = matrix_factorization(h_split_2[1], U2, V1, 2, T, alpha)
-        U0,V2 = matrix_factorization(h_split_0[2], U0, V2, 2, T, alpha)
-
-        U1,V2 = matrix_factorization(h_split_1[2], U1, V2, 2, T, alpha)
-        U0,V0 = matrix_factorization(h_split_0[0], U0, V0, 2, T, alpha)
-        U2,V1 = matrix_factorization(h_split_2[1], U2, V1, 2, T, alpha)
-
-        U2,V2 = matrix_factorization(h_split_2[2], U2, V2, 2, T, alpha)
-        U1,V0 = matrix_factorization(h_split_1[0], U1, V0, 2, T, alpha)
-        U0,V1 = matrix_factorization(h_split_0[1], U0, V1, 2, T, alpha)
-        
-        U0,V2 = matrix_factorization(h_split_0[2], U0, V2, 2, T, alpha)
-        U1,V1 = matrix_factorization(h_split_1[1], U1, V1, 2, T, alpha)
-        U2,V0 = matrix_factorization(h_split_2[0], U2, V0, 2, T, alpha)
-
-    U = numpy.concatenate((U0, U1, U2))
-    V = numpy.concatenate((V0, V1, V2))
-
-    return U,V
-
-def dsgd1(R, U, V):
-
-    #Verify if it is a quadratic matrix
-    # if len(R)!=len(R[i]):
-    #     return False
-
-    #R size must to be divided by block_size
-    # if len(R)%block_size!=0
-        # return False
+def dsgd_2x2(R, U, V):
 
     v_split_R = numpy.split(R,2)
-    
+
     h_split_0 = numpy.hsplit(v_split_R[0],2)
-    h_split_1 = numpy.hsplit(v_split_R[0],2)
-    
+    h_split_1 = numpy.hsplit(v_split_R[1],2)
+
+    b_11 = h_split_0[0]
+    b_12 = h_split_0[1]
+
+    b_21 = h_split_1[0]
+    b_22 = h_split_1[1]
 
     split_U = numpy.split(U,2)
     split_V = numpy.split(V,2)
 
-    ############ 1st Pass ############
-
-    T = 5
-    alpha = 0.0002
-
     U0 = split_U[0]
     U1 = split_U[1]
-    
+
     V0 = split_V[0]
     V1 = split_V[1]
-    
-    for step in xrange(5000): 
 
-        U0,V0 = matrix_factorization(h_split_0[0], U0, V0, 2, T, alpha)
-        U1,V1 = matrix_factorization(h_split_1[1], U1, V1, 2, T, alpha)
-       
-        U0,V1 = matrix_factorization(h_split_0[1], U0, V1, 2, T, alpha)
-        U1,V0 = matrix_factorization(h_split_1[0], U1, V0, 2, T, alpha)
+    T=100
 
-    U = numpy.concatenate((U0, U1, U2))
-    V = numpy.concatenate((V0, V1, V2))
+    for step in xrange(1000):
+        i = randint(0,1)
 
-    return U,V
+        if i==0:
+            U0,V0 = sgd(b_11, U0, V0, 2, T)
+            U1,V1 = sgd(b_22, U1, V1, 2, T)
+        else:
+            U0,V1 = sgd(b_12, U0, V1, 2, T)
+            U1,V0 = sgd(b_21, U1, V0, 2, T)
 
+    U = numpy.concatenate((U0, U1))
+    V = numpy.concatenate((V0, V1))
+    return U, V
 
 ###############################################################################
 
@@ -206,28 +195,17 @@ if __name__ == "__main__":
     U2 = numpy.copy(U);
     V2 = numpy.copy(V);
 
-    nP0, nQ0 = matrix_factorization(R, U0, V0, K, 5000, 0.0002)
-    # print nP0
-    # print nQ0
-    # print '############################'
-
-    nP1, nQ1 = dsgd(R, U1, V1)
-    # print nP1
-    # print nQ1
-    # print '############################'
-
-    nP2, nQ2 = dsgd1(R, U2, V2)
-
+    nP0, nQ0 = sgd(R, U0, V0)
     nR0 = numpy.dot(nP0, nQ0.T)
     print rmse(nR0,R)
 
+    nP1, nQ1 = dsgd_2x2(R, U1, V1)
     nR1 = numpy.dot(nP1, nQ1.T)
     print rmse(nR1,R)
 
+    nP2, nQ2 = dsgd_3x3(R, U2, V2)
     nR2 = numpy.dot(nP2, nQ2.T)
     print rmse(nR2,R)
-    
-
-
-
    
+
+    
