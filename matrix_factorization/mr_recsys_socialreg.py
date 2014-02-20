@@ -38,7 +38,7 @@ def rmse(predictions, R):
 
     return rmse
 
-def sgd(R, U, V, K=2, steps=180000, alpha=0.0002, lamb=0.02 ,beta=0.02):
+def sgd(R, U, V, K=2, steps=1800000, alpha=0.0002, lamb=0.02 ,beta=0.02):
     for step in xrange(steps):
 
         i = randint(0,len(U)-1)
@@ -53,6 +53,18 @@ def sgd(R, U, V, K=2, steps=180000, alpha=0.0002, lamb=0.02 ,beta=0.02):
             U[i]   = u_temp
 
     return U, V
+
+def matrix_factorization_2(R, P, Q, K, steps=5000, alpha=0.0002, beta=0.02):
+    Q = Q.T
+    for step in xrange(steps):
+        for i in xrange(len(R)):
+            for j in xrange(len(R[i])):
+                if R[i][j] > 0:
+                    y = R[i][j] - numpy.dot(P[i,:],Q[:,j])
+                    for k in xrange(K):
+                        P[i][k] = P[i][k] + alpha * (2 * y * Q[k][j] - beta * P[i][k])
+                        Q[k][j] = Q[k][j] + alpha * (2 * y * P[i][k] - beta * Q[k][j])
+    return P, Q.T
 
 def dsgd_3x3(R, U, V):
 
@@ -121,6 +133,24 @@ def dsgd_3x3(R, U, V):
     
     return U, V
 
+def generate_matrix():
+    matrix = numpy.zeros((100,100))
+
+    for i in xrange(100):
+
+        for j in xrange(30):
+
+            item = randint(0,len(matrix)-1)
+
+            rating = 0
+                
+            while(rating==0):
+                rating = randint(0,6)
+
+                matrix[i][item] = rating
+
+    return matrix
+
 def dsgd_2x2(R, U, V):
 
     v_split_R = numpy.split(R,2)
@@ -164,16 +194,21 @@ def dsgd_2x2(R, U, V):
 if __name__ == "__main__":
 
     # matrix m x n
-    R = [
-         [5,4,0,1,3,0],
-         [5,0,4,0,0,1],
-         [0,5,0,1,1,0],
-         [1,0,1,5,4,0],
-         [0,1,0,0,5,4],
-         [1,0,2,5,0,0]
-        ]
+    # R = [
+    #      [5,4,0,1,3,0],
+    #      [5,0,4,0,0,1],
+    #      [0,5,0,1,1,0],
+    #      [1,0,1,5,4,0],
+    #      [0,1,0,0,5,4],
+    #      [1,0,2,5,0,0]
+    #     ]
+
+    R = numpy.loadtxt(open("/home/arthur/projects/mestrado/bigdata/foursquare/NY_MATRIX","rb"),delimiter=",")
 
     R = numpy.array(R)
+
+
+    # R = generate_matrix()
 
     # users
     M = len(R)
@@ -181,7 +216,7 @@ if __name__ == "__main__":
     # itens
     N = len(R[0])
 
-    K = 2
+    K = 10
 
     U = numpy.random.rand(M,K)
     V = numpy.random.rand(N,K)
@@ -189,7 +224,7 @@ if __name__ == "__main__":
     U0 = numpy.copy(U);
     V0 = numpy.copy(V);
 
-    U1 = numpy.copy(U);
+    U1 = numpy.copy(U); 
     V1 = numpy.copy(V);
 
     U2 = numpy.copy(U);
@@ -199,13 +234,13 @@ if __name__ == "__main__":
     nR0 = numpy.dot(nP0, nQ0.T)
     print rmse(nR0,R)
 
-    nP1, nQ1 = dsgd_2x2(R, U1, V1)
+    nP1, nQ1 = matrix_factorization_2(R, U1, V1, K)
     nR1 = numpy.dot(nP1, nQ1.T)
     print rmse(nR1,R)
 
-    nP2, nQ2 = dsgd_3x3(R, U2, V2)
-    nR2 = numpy.dot(nP2, nQ2.T)
-    print rmse(nR2,R)
+    # nP2, nQ2 = dsgd_3x3(R, U2, V2)
+    # nR2 = numpy.dot(nP2, nQ2.T)
+    # print rmse(nR2,R)
    
 
     
