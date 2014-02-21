@@ -29,43 +29,6 @@ except:
     the final matrices P and Q
 """
 
-def rmse(predictions, R):
-    rmse = 0
-    for i in xrange(len(R)):
-        for j in xrange(len(R[i])):
-            if R[i][j] > 0:
-                rmse += numpy.sqrt(((predictions[i][j] - R[i][j]) ** 2).mean())
-
-    return rmse
-
-def sgd(R, U, V, K=2, steps=1800000, alpha=0.0002, lamb=0.02 ,beta=0.02):
-    for step in xrange(steps):
-
-        i = randint(0,len(U)-1)
-        j = randint(0,len(V)-1)
-
-        if R[i][j] > 0:
-            Ui = U[i,:]
-            Vj = V[j,:]
-            Ra =  R[i][j] - numpy.dot(Ui.T,Vj)
-            u_temp = Ui + 2*alpha * ( (Ra * Vj) - (lamb/len(U) * Ui) )
-            V[j]   = Vj + 2*alpha * ( (Ra * Ui) - (lamb/len(V) * Vj) )
-            U[i]   = u_temp
-
-    return U, V
-
-def matrix_factorization_2(R, P, Q, K, steps=5000, alpha=0.0002, beta=0.02):
-    Q = Q.T
-    for step in xrange(steps):
-        for i in xrange(len(R)):
-            for j in xrange(len(R[i])):
-                if R[i][j] > 0:
-                    y = R[i][j] - numpy.dot(P[i,:],Q[:,j])
-                    for k in xrange(K):
-                        P[i][k] = P[i][k] + alpha * (2 * y * Q[k][j] - beta * P[i][k])
-                        Q[k][j] = Q[k][j] + alpha * (2 * y * P[i][k] - beta * Q[k][j])
-    return P, Q.T
-
 def dsgd_3x3(R, U, V):
 
     v_split_R = numpy.split(R,3)
@@ -189,6 +152,61 @@ def dsgd_2x2(R, U, V):
     V = numpy.concatenate((V0, V1))
     return U, V
 
+def rmse(predictions, R):
+    rmse = 0
+    for i in xrange(len(R)):
+        for j in xrange(len(R[i])):
+            if R[i][j] > 0:
+                rmse += numpy.sqrt(((predictions[i][j] - R[i][j]) ** 2).mean())
+
+    return rmse
+
+def sgd(R, U, V, list_index, steps=18000000, alpha=0.0002, lamb=0.02):
+
+    len_list_index = len(list_index)
+
+    for step in xrange(steps):
+
+        index = randint(0,len_list_index-1)
+
+        # i = randint(0,len(U)-1)
+        # j = randint(0,len(V)-1)
+
+        sI,sJ =  list_index[index].split(',')
+
+        i = int(sI)
+        j = int(sJ)
+
+        if R[i][j] > 0:
+            Ui = U[i,:]
+            Vj = V[j,:]
+            Ra =  R[i][j] - numpy.dot(Ui.T,Vj)
+            u_temp = Ui + 2*alpha * ( (Ra * Vj) - (lamb/len(U) * Ui) )
+            V[j]   = Vj + 2*alpha * ( (Ra * Ui) - (lamb/len(V) * Vj) )
+            U[i]   = u_temp
+
+    return U, V
+
+def matrix_factorization_2(R, P, Q, K, steps=5000, alpha=0.0002, beta=0.02):
+    Q = Q.T
+    for step in xrange(steps):
+        for i in xrange(len(R)):
+            for j in xrange(len(R[i])):
+                if R[i][j] > 0:
+                    y = R[i][j] - numpy.dot(P[i,:],Q[:,j])
+                    for k in xrange(K):
+                        P[i][k] = P[i][k] + alpha * (2 * y * Q[k][j] - beta * P[i][k])
+                        Q[k][j] = Q[k][j] + alpha * (2 * y * P[i][k] - beta * Q[k][j])
+    return P, Q.T
+
+def load_index_array(R):
+    list_index = []
+    for i in xrange(len(R)):
+        for j in xrange(len(R[0])):
+            if R[i][j] > 0:
+                list_index.append(`i`+','+`j`)
+    return list_index 
+
 ###############################################################################
 
 if __name__ == "__main__":
@@ -203,7 +221,7 @@ if __name__ == "__main__":
     #      [1,0,2,5,0,0]
     #     ]
 
-    R = numpy.loadtxt(open("/home/arthur/projects/mestrado/bigdata/foursquare/NY_MATRIX","rb"),delimiter=",")
+    R = numpy.loadtxt(open("../dataset/NY_MATRIX","rb"),delimiter=",")
 
     R = numpy.array(R)
 
@@ -216,27 +234,33 @@ if __name__ == "__main__":
     # itens
     N = len(R[0])
 
-    K = 10
+    for Y in xrange(20):
+    # K = 2
 
-    U = numpy.random.rand(M,K)
-    V = numpy.random.rand(N,K)
+        list_index = load_index_array(R)
 
-    U0 = numpy.copy(U);
-    V0 = numpy.copy(V);
+        K = randint(4,11)
+        U = numpy.random.rand(M,K)
+        V = numpy.random.rand(N,K)
 
-    U1 = numpy.copy(U); 
-    V1 = numpy.copy(V);
+    # U0 = numpy.copy(U);
+    # V0 = numpy.copy(V);
 
-    U2 = numpy.copy(U);
-    V2 = numpy.copy(V);
+        nP0, nQ0 = sgd(R, U, V, list_index)
+        nR0 = numpy.dot(nP0, nQ0.T)
+        print K
+        print rmse(nR0,R)
 
-    nP0, nQ0 = sgd(R, U0, V0)
-    nR0 = numpy.dot(nP0, nQ0.T)
-    print rmse(nR0,R)
+    # U1 = numpy.copy(U); 
+    # V1 = numpy.copy(V);
 
-    nP1, nQ1 = matrix_factorization_2(R, U1, V1, K)
-    nR1 = numpy.dot(nP1, nQ1.T)
-    print rmse(nR1,R)
+    # U2 = numpy.copy(U);
+    # V2 = numpy.copy(V);
+
+
+    # nP1, nQ1 = matrix_factorization_2(R, U1, V1, K)
+    # nR1 = numpy.dot(nP1, nQ1.T)
+    # print rmse(nR1,R)
 
     # nP2, nQ2 = dsgd_3x3(R, U2, V2)
     # nR2 = numpy.dot(nP2, nQ2.T)
