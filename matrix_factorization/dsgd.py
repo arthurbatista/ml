@@ -8,7 +8,6 @@ try:
     import numpy
     import math
     import scipy
-    from scipy.stats import pearsonr
     from random import randint
 except:
     print "This implementation requires the numpy module."
@@ -133,14 +132,91 @@ def generate_stratus_matrix(R, U, V, block_size, step):
 
 def rmse(predictions, R):
     rmse = 0
+    T = 0
     for i in xrange(len(R)):
         for j in xrange(len(R[i])):
             if R[i][j] > 0:
-                rmse += numpy.sqrt(((predictions[i][j] - R[i][j]) ** 2).mean())
+                T += 1
+                rmse += (predictions[i][j] - R[i][j]) ** 2
 
-    return rmse
+    return  numpy.sqrt(rmse/T)
 
-def sgd(R, U, V, list_index, steps=1800000, alpha=0.0002, lamb=0.02):
+def pearson(x, y):
+    assert len(x) > 0
+    assert len(x) == len(y)
+
+    dense_X = []
+    dense_Y = []
+
+    for i in xrange(len(x)):
+        if x[i] > 0 and y[i] > 0:
+            dense_X.append(x[i])
+            dense_Y.append(y[i])
+
+    # print dense_X
+    # print dense_Y
+
+    n = len(dense_X)
+    assert n > 0
+    avg_x = float(sum(dense_X)) / len(dense_X)
+    avg_y = float(sum(dense_Y)) / len(dense_Y)
+    diffprod = 0
+    xdiff2 = 0
+    ydiff2 = 0
+    for idx in range(n):
+        xdiff = dense_X[idx] - avg_x
+        ydiff = dense_Y[idx] - avg_y
+        diffprod += xdiff * ydiff
+        xdiff2 += xdiff * xdiff
+        ydiff2 += ydiff * ydiff
+
+    sim = diffprod / math.sqrt(xdiff2 * ydiff2)
+
+    if math.isnan(sim):
+        sim = 0
+
+    return (sim+1)/2
+
+def load_index_array(R):
+    list_index = []
+    for i in xrange(len(R)):
+        for j in xrange(len(R[0])):
+            if R[i][j] > 0:
+                list_index.append(`i`+','+`j`)
+    return list_index
+
+def load_grafo_social(R):
+    grafo_size = len(R)
+
+    social_graph = numpy.zeros((grafo_size, grafo_size))
+
+    social_network = numpy.loadtxt(open("../dataset/SOCIAL_NETWORK","rb"),delimiter=",")
+
+    for i in xrange(len(social_network)):
+        
+        user   = social_network[i][0]
+        friend = social_network[i][1]
+
+        x = R[user]
+        y = R[friend]
+
+        cor_pearson = pearson(x,y)
+
+        social_graph[user][friend] = cor_pearson
+        social_graph[friend][user] = cor_pearson
+
+    return social_graph
+
+def sr_f(i, P, SG):
+    reg = 0.0
+
+    for f in xrange(len(SG[i])):
+        if SG[i][f] > 0:
+            reg += SG[i][f] * (P[i] - P[f])
+
+    return reg
+
+def sgd(R, U, V, list_index, steps=1800000, alpha=0.0001, lamb=0.002):
 
     len_list_index = len(list_index)
 
@@ -156,25 +232,54 @@ def sgd(R, U, V, list_index, steps=1800000, alpha=0.0002, lamb=0.02):
         if R[i][j] > 0:
             Ui = U[i,:]
             Vj = V[j,:]
-            Ra = numpy.dot(Ui.T,Vj) - R[i][j]
-            u_temp = Ui - 2*alpha * ( (Ra * Vj) + (lamb * Ui) )
-            V[j]   = Vj - 2*alpha * ( (Ra * Ui) + (lamb * Vj) )
+            e = numpy.dot(Ui.T,Vj) - R[i][j]
+            u_temp = Ui - alpha * ( (e * Vj) + (lamb * Ui) )
+            V[j]   = Vj - alpha * ( (e * Ui) + (lamb * Vj) )
+            U[i]   = u_temp
+
+    return U, V
+
+def sgd_sr(R, U, V, list_index, steps=1800000, alpha=0.0001, lamb=0.002, beta=0.001):
+
+    len_list_index = len(list_index)
+
+    SG = load_grafo_social(R)
+
+    for step in xrange(steps):
+
+        index = randint(0,len_list_index-1)
+
+        sI,sJ =  list_index[index].split(',')
+
+        i = int(sI)
+        j = int(sJ)
+
+        if R[i][j] > 0:
+            Ui = U[i,:]
+            Vj = V[j,:]
+            e = numpy.dot(Ui.T,Vj) - R[i][j]
+            u_temp = Ui - alpha * ( (e * Vj) + (lamb * Ui) + sr_f(i,U,SG) )
+            V[j]   = Vj - alpha * ( (e * Ui) + (lamb * Vj) )
             U[i]   = u_temp
 
     return U, V
 
 def dsgd(R, U, V):
 
-    T=100
+    T=1
     block_size = 3
 
-    for step in xrange(1000):
+    for step in xrange(1):
 
         list_stratus, list_U, list_V, index_stratus_selected = generate_stratus_matrix(R, U, V, block_size, step)
 
         for i in xrange(block_size):
 
             compressed_R = load_index_array(list_stratus[i])
+
+            print list_stratus[i]
+            print list_U[i] 
+            print list_V[i]
 
             list_U[i],list_V[i] = sgd(list_stratus[i], list_U[i], list_V[i], compressed_R, T)
 
@@ -198,27 +303,38 @@ def dsgd(R, U, V):
 
     return U, V
 
-def load_index_array(R):
-    list_index = []
-    for i in xrange(len(R)):
-        for j in xrange(len(R[0])):
-            if R[i][j] > 0:
-                list_index.append(`i`+','+`j`)
-    return list_index
-
 ###############################################################################
 
 if __name__ == "__main__":
 
     # matrix m x n
+    # R = [
+    #      [5,4,0,1,3,0],
+    #      [5,0,4,0,0,1],
+    #      [0,5,0,1,1,0],
+    #      [1,0,1,5,4,0],
+    #      [0,1,0,0,5,4],
+    #      [1,0,2,5,0,0]
+    #     ]
+
+    # R = [
+    #      [5,4,0,1,3],
+    #      [5,0,4,0,0],
+    #      [0,5,0,1,1],
+    #      [1,0,1,5,4],
+    #      [0,1,0,0,5],
+    #      [1,0,2,5,0]
+    #     ]
+
     R = [
-         [5,4,0,1,3,0],
-         [5,0,4,0,0,1],
-         [0,5,0,1,1,0],
-         [1,0,1,5,4,0],
-         [0,1,0,0,5,4],
-         [1,0,2,5,0,0]
-        ]
+         [5,4,0,1,1,0,0,5],
+         [0,5,3,0,1,1,0,4],
+         [0,5,5,0,0,2,1,0],
+         [0,1,1,3,5,4,0,1],
+         [0,1,0,4,4,0,1,1],
+         [1,1,0,5,5,0,0,0],
+         [1,0,1,5,0,4,5,0]
+        ]    
 
     # R = numpy.loadtxt(open("../dataset/NY_MATRIX","rb"),delimiter=",")
 
@@ -240,13 +356,27 @@ if __name__ == "__main__":
     U1 = numpy.copy(U); 
     V1 = numpy.copy(V);
 
-    nP0, nQ0 = dsgd(R, U0, V0)
+    U2 = numpy.copy(U); 
+    V2 = numpy.copy(V);
+
+    # print R
+
+    alpha = 0.0002
+    lamb  = 0.001
+    steps = 180000
+
+    nP0, nQ0 = sgd(R, U0, V0, load_index_array(R),   steps, alpha, lamb)
     nR0 = numpy.dot(nP0, nQ0.T)
+    # print nR0[0]
     print rmse(nR0,R)
 
-    nP1, nQ1 = sgd(R, U1, V1,load_index_array(R))
+    nP1, nQ1 = sgd_sr(R, U1, V1,load_index_array(R), steps, alpha, lamb, 0.001)
     nR1 = numpy.dot(nP1, nQ1.T)
+    # print nR1[0]
     print rmse(nR1,R)
-   
 
-    
+    nP2, nQ2 = sgd_sr(R, U2, V2,load_index_array(R), steps, alpha, lamb, 0.01)
+    nR2 = numpy.dot(nP2, nQ2.T)
+    # print nR2[0]
+    print rmse(nR2,R)
+    # print nR2
