@@ -216,6 +216,47 @@ def sr_f(i, P, SG):
 
     return reg
 
+def gd(R, U, V, list_index, steps=1800000, alpha=0.0001, lamb=0.002):
+
+    for step in xrange(steps):
+        
+        for index in xrange(len(list_index)):
+
+            sI,sJ =  list_index[index].split(',')
+
+            i = int(sI)
+            j = int(sJ)
+        
+            if R[i][j] > 0:
+                Ui = U[i,:]
+                Vj = V[j,:]
+                e = numpy.dot(Ui.T,Vj) - R[i][j]
+                u_temp = Ui - alpha * ( (e * Vj) + (lamb * Ui) )
+                V[j]   = Vj - alpha * ( (e * Ui) + (lamb * Vj) )
+                U[i]   = u_temp
+    return U, V
+
+def gd_sr(R, U, V, list_index, steps=1800000, alpha=0.0001, lamb=0.002, beta=0.001):
+
+    SG = load_grafo_social(R)
+
+    for step in xrange(steps):
+        for index in xrange(len(list_index)):
+
+            sI,sJ =  list_index[index].split(',')
+
+            i = int(sI)
+            j = int(sJ)
+        
+            if R[i][j] > 0:
+                Ui = U[i,:]
+                Vj = V[j,:]
+                e = numpy.dot(Ui.T,Vj) - R[i][j]
+                u_temp = Ui - alpha * ( (e * Vj) + (lamb * Ui) + sr_f(i,U,SG) )
+                V[j]   = Vj - alpha * ( (e * Ui) + (lamb * Vj) )
+                U[i]   = u_temp
+    return U, V
+
 def sgd(R, U, V, list_index, steps=1800000, alpha=0.0001, lamb=0.002):
 
     len_list_index = len(list_index)
@@ -264,12 +305,11 @@ def sgd_sr(R, U, V, list_index, steps=1800000, alpha=0.0001, lamb=0.002, beta=0.
 
     return U, V
 
-def dsgd(R, U, V):
+def dsgd(R, U, V, block_size, steps, alpha, lamb):
 
-    T=1
-    block_size = 3
+    T = 100
 
-    for step in xrange(1):
+    for step in xrange(T):
 
         list_stratus, list_U, list_V, index_stratus_selected = generate_stratus_matrix(R, U, V, block_size, step)
 
@@ -277,11 +317,11 @@ def dsgd(R, U, V):
 
             compressed_R = load_index_array(list_stratus[i])
 
-            print list_stratus[i]
-            print list_U[i] 
-            print list_V[i]
+            # print list_stratus[i]
+            # print list_U[i] 
+            # print list_V[i]
 
-            list_U[i],list_V[i] = sgd(list_stratus[i], list_U[i], list_V[i], compressed_R, T)
+            list_U[i],list_V[i] = sgd(list_stratus[i], list_U[i], list_V[i], compressed_R, steps, alpha, lamb)
 
         index_U=0
         for index_array in xrange(block_size):
@@ -326,17 +366,17 @@ if __name__ == "__main__":
     #      [1,0,2,5,0]
     #     ]
 
-    R = [
-         [5,4,0,1,1,0,0,5],
-         [0,5,3,0,1,1,0,4],
-         [0,5,5,0,0,2,1,0],
-         [0,1,1,3,5,4,0,1],
-         [0,1,0,4,4,0,1,1],
-         [1,1,0,5,5,0,0,0],
-         [1,0,1,5,0,4,5,0]
-        ]    
+    # R = [
+    #      [5,4,0,1,1,0,0,5],
+    #      [0,5,3,0,1,1,0,4],
+    #      [0,5,5,0,0,2,1,0],
+    #      [0,1,1,3,5,4,0,1],
+    #      [0,1,0,4,4,0,1,1],
+    #      [1,1,0,5,5,0,0,0],
+    #      [1,0,1,5,0,4,5,0]
+    #     ]    
 
-    # R = numpy.loadtxt(open("../dataset/NY_MATRIX","rb"),delimiter=",")
+    R = numpy.loadtxt(open("../dataset/NY_MATRIX","rb"),delimiter=",")
 
     R = numpy.array(R)
 
@@ -346,7 +386,7 @@ if __name__ == "__main__":
     # itens
     N = len(R[0])
 
-    K = 2
+    K = 9
     U = numpy.random.rand(M,K)
     V = numpy.random.rand(N,K)
 
@@ -365,18 +405,19 @@ if __name__ == "__main__":
     lamb  = 0.001
     steps = 180000
 
-    nP0, nQ0 = sgd(R, U0, V0, load_index_array(R),   steps, alpha, lamb)
+    nP0, nQ0 = sgd(R, U0, V0, load_index_array(R), steps, alpha, lamb)
     nR0 = numpy.dot(nP0, nQ0.T)
     # print nR0[0]
     print rmse(nR0,R)
 
-    nP1, nQ1 = sgd_sr(R, U1, V1,load_index_array(R), steps, alpha, lamb, 0.001)
-    nR1 = numpy.dot(nP1, nQ1.T)
-    # print nR1[0]
-    print rmse(nR1,R)
+    # nP1, nQ1 = dsgd(R, U1, V1, 2, 1000, alpha, lamb)
+    # nR1 = numpy.dot(nP1, nQ1.T)
+    # # print nR1[0]
+    # print rmse(nR1,R)
 
     nP2, nQ2 = sgd_sr(R, U2, V2,load_index_array(R), steps, alpha, lamb, 0.01)
     nR2 = numpy.dot(nP2, nQ2.T)
     # print nR2[0]
     print rmse(nR2,R)
-    # print nR2
+    
+
